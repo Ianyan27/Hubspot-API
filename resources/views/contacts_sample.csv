@@ -1,0 +1,4 @@
+"Contact ID",Email,"First Name","Last Name",delete_flag
+1001,john.doe@example.com,John,Doe,Yes
+1002,jane.smith@example.com,Jane,Smith,No
+1003,bob.jones@example.com,Bob,Jones,Yes
