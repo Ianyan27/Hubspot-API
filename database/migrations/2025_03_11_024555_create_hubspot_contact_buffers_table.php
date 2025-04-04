@@ -11,8 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('contacts', function (Blueprint $table) {
-            $table->boolean('marked_deleted')->default(false)->after('delete_flag');
+        Schema::create('hubspot_contact_buffers', function (Blueprint $table) {
+            $table->id();
+            $table->string('hubspot_id')->unique();
+            $table->json('data');
+            $table->timestamps();
         });
     }
 
@@ -21,8 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('contacts', function (Blueprint $table) {
-            $table->dropColumn('marked_deleted');
-        });
+        Schema::dropIfExists('hubspot_contact_buffers');
     }
 };

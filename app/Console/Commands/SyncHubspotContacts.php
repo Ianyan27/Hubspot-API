@@ -1,113 +1,126 @@
 <?php
+// app/Console/Commands/SyncHubspotContacts.php
 
 namespace App\Console\Commands;
 
+use App\Http\Controllers\HubspotController;
+use App\Services\HubspotService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use App\Models\Contact;
 
 class SyncHubspotContacts extends Command
 {
-    protected $signature = 'search:hubspot-contacts';
-    protected $description = 'Retrieve contacts from HubSpot using the Search API and save them into MariaDB';
+    protected $signature = 'hubspot:sync-contacts 
+                           {--start-date= : Start date in format YYYY-MM-DD}
+                           {--end-date= : End date in format YYYY-MM-DD}
+                           {--chunk-days=7 : Days per chunk for very large datasets}';
+
+    protected $description = 'Sync contacts from HubSpot to database';
+
+    private $hubspotService;
+    private $hubspotController;
+
+    public function __construct(HubspotService $hubspotService, HubspotController $hubspotController)
+    {
+        parent::__construct();
+        $this->hubspotService = $hubspotService;
+        $this->hubspotController = $hubspotController;
+    }
 
     public function handle()
     {
-        $this->info('Starting HubSpot contacts search and sync...');
-        Log::info('Starting HubSpot contacts search and sync...');
-
-        // Retrieve the HubSpot token from .env
-        $token = env('HUBSPOT_PRIVATE_APP_TOKEN');
-        if (!$token) {
-            $this->error('HubSpot token is missing in .env file.');
-            Log::error('HubSpot token is missing in .env file.');
-            return 1;
-        }
-
-        // HubSpot Search API endpoint for contacts
-        $url = 'https://api.hubapi.com/crm/v3/objects/contacts/search';
-        $after = null;
-        $totalContacts = 0;
-
-        do {
-            // Prepare the request body for the Search API.
-            $body = [
-                'filterGroups' => [],
-                'properties'   => ['delete_flag', 'firstname', 'lastname', 'email'],
-                'limit'        => 100,
-            ];
-
-            // If a pagination cursor exists, add it to the body.
-            if ($after) {
-                $body['after'] = $after;
-            }
-
-            Log::info('Sending search API request to HubSpot', ['body' => $body]);
-            $response = Http::withToken($token)->post($url, $body);
-
-            if (!$response->successful()) {
-                Log::error("Error retrieving data from HubSpot Search API: " . $response->body());
-                $this->error('Error retrieving data from HubSpot Search API: ' . $response->body());
-                return 1;
-            }
-
-            $data = $response->json();
-            Log::info('Received data from HubSpot Search API', ['data' => $data]);
-
-            if (!isset($data['results'])) {
-                $this->error('No contacts found in the response.');
-                Log::error('No contacts found in the response.');
-                return 1;
-            }
-
-            // Loop through each retrieved contact and process it.
-            foreach ($data['results'] as $record) {
-                $contactId  = $record['id'];
-                $properties = $record['properties'] ?? [];
-
-                $firstname = $properties['firstname'] ?? null;
-                $lastname  = $properties['lastname'] ?? null;
-                $email     = $properties['email'] ?? null;
-
-                // Convert the delete_flag property into a string ("Yes" or "No")
-                if (isset($properties['delete_flag'])) {
-                    $isTrue = filter_var($properties['delete_flag'], FILTER_VALIDATE_BOOLEAN);
-                    $deleteFlagValue = $isTrue ? 'Yes' : 'No';
-                } else {
-                    $deleteFlagValue = 'No';
+        // Increase execution time
+        set_time_limit(3600); // 1 hour
+        
+        $this->info('Starting HubSpot contacts sync...');
+        
+        $syncStatus = $this->hubspotService->getSyncStatus('contacts');
+        
+        // Determine date range
+        $startDate = $this->option('start-date') 
+            ? Carbon::parse($this->option('start-date'))->startOfDay()->format('Y-m-d\TH:i:s\Z')
+            : ($syncStatus->last_sync_timestamp 
+                ? $syncStatus->last_sync_timestamp->format('Y-m-d\TH:i:s\Z')
+                : '2020-03-01T00:00:00Z');
+        
+        $endDate = $this->option('end-date')
+            ? Carbon::parse($this->option('end-date'))->endOfDay()->format('Y-m-d\TH:i:s\Z')
+            : Carbon::now()->format('Y-m-d\TH:i:s\Z');
+        
+        $this->info("Date range: $startDate to $endDate");
+        
+        // For very large datasets, process in chunks by days
+        $startDateObj = Carbon::parse($startDate);
+        $endDateObj = Carbon::parse($endDate);
+        $chunkDays = (int)$this->option('chunk-days');
+        
+        if ($startDateObj->diffInDays($endDateObj) > $chunkDays) {
+            $this->info("Processing large dataset in chunks of $chunkDays days");
+            
+            $currentChunkStart = $startDateObj->copy();
+            $totalProcessed = 0;
+            
+            while ($currentChunkStart->lt($endDateObj)) {
+                $chunkEnd = $currentChunkStart->copy()->addDays($chunkDays);
+                
+                // Don't exceed end date
+                if ($chunkEnd->gt($endDateObj)) {
+                    $chunkEnd = $endDateObj->copy();
                 }
-
-                Log::info("Processing contact", [
-                    'contact_id'  => $contactId,
-                    'firstname'   => $firstname,
-                    'lastname'    => $lastname,
-                    'email'       => $email,
-                    'delete_flag' => $deleteFlagValue,
+                
+                $chunkStartStr = $currentChunkStart->format('Y-m-d\TH:i:s\Z');
+                $chunkEndStr = $chunkEnd->format('Y-m-d\TH:i:s\Z');
+                
+                $this->info("Processing chunk: $chunkStartStr to $chunkEndStr");
+                
+                // Update status to running
+                $this->hubspotService->updateSyncStatus('contacts', [
+                    'status' => 'running',
+                    'start_window' => $chunkStartStr,
+                    'end_window' => $chunkEndStr,
                 ]);
-
-                // Save the contact to the database using updateOrCreate.
-                Contact::updateOrCreate(
-                    ['contact_id' => $contactId],
-                    [
-                        'first_name'  => $firstname,
-                        'last_name'   => $lastname,
-                        'email'       => $email,
-                        'delete_flag' => $deleteFlagValue,
-                    ]
-                );
-
-                $totalContacts++;
-                Log::info("Synced contact", ['contact_id' => $contactId]);
+                
+                // Run sync for this chunk
+                try {
+                    $this->hubspotController->syncContacts($chunkStartStr, $chunkEndStr);
+                    $totalProcessed += $syncStatus->refresh()->total_synced;
+                    $this->info("Chunk completed, processed {$syncStatus->total_synced} contacts");
+                } catch (\Exception $e) {
+                    $this->error("Error processing chunk: " . $e->getMessage());
+                    // Continue to next chunk
+                }
+                
+                // Move to next chunk
+                $currentChunkStart = $chunkEnd->addSecond();
             }
-
-            // Handle pagination: use the "after" token if present.
-            $after = $data['paging']['next']['after'] ?? null;
-            Log::info('Pagination cursor', ['after' => $after]);
-        } while ($after);
-
-        $this->info("Successfully synced {$totalContacts} contacts.");
-        Log::info("Successfully synced {$totalContacts} contacts.");
-        return 0;
+            
+            $this->info("Total contacts processed: $totalProcessed");
+            
+        } else {
+            // Process entire range at once
+            $this->info("Processing entire date range at once");
+            
+            // Update status to running
+            $this->hubspotService->updateSyncStatus('contacts', [
+                'status' => 'running',
+                'start_window' => $startDate,
+                'end_window' => $endDate,
+                'total_synced' => 0,
+                'total_errors' => 0,
+                'error_log' => null
+            ]);
+            
+            // Run sync
+            try {
+                $this->hubspotController->syncContacts($startDate, $endDate);
+                $this->info("Sync completed, processed {$syncStatus->refresh()->total_synced} contacts");
+            } catch (\Exception $e) {
+                $this->error("Error during sync: " . $e->getMessage());
+            }
+        }
+        
+        $this->info('HubSpot contacts sync completed!');
+        
+        return Command::SUCCESS;
     }
 }

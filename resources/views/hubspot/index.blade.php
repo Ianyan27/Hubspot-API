@@ -1,11 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>HubSpot Contacts</title>
-    <!-- (Optional) Include Bootstrap or your preferred CSS framework -->
-</head>
-<body>
+@extends('layouts.app')
+@section('content')
     <h1>HubSpot Contacts</h1>
 
     <!-- Display any error messages if the request failed -->
@@ -13,41 +7,50 @@
         <p style="color: red;">Error: {{ $error }}</p>
     @endisset
 
-    <!-- A "Refresh Contacts" button that simply reloads this page -->
-    <a href="{{ route('hubspot.contacts') }}">Refresh Contacts</a>
+    <!-- Buttons to refresh contacts and export CSV -->
+    <a href="{{ route('hubspot.search.contacts') }}">Refresh Contacts</a>
+    <a href="{{ route('hubspot.contacts.export') }}">Export CSV</a>
 
-    <table border="1" cellpadding="8" cellspacing="0" style="margin-top:20px;">
+    <table border="1" cellpadding="8" cellspacing="0" style="margin-top:20px; width:100%;">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Email</th>
-                <th>Delete Flag</th>
+                <th style="text-align: center;">Gender</th>
+                <th style="text-align: center;">Delete Flag</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             @forelse($contacts as $contact)
-                <tr>
-                    <td>{{ $contact['id'] }}</td>
-                    <td>{{ $contact['properties']['firstname'] ?? '' }}</td>
-                    <td>{{ $contact['properties']['lastname'] ?? '' }}</td>
-                    <td>{{ $contact['properties']['email'] ?? '' }}</td>
-                    <td>
-                        @if(isset($contact['properties']['delete_flag']))
-                            {{-- If it's "true", show "Yes", otherwise "No" --}}
-                            {{ filter_var($contact['properties']['delete_flag'], FILTER_VALIDATE_BOOLEAN) ? 'Yes' : 'No' }}
-                        @else
-                            No
-                        @endif
+                <tr class="{{ $contact->marked_deleted ? 'marked-deleted' : '' }}">
+                    <td>{{ $contact->contact_id }}</td>
+                    <td>{{ $contact->first_name ?? '' }}</td>
+                    <td>{{ $contact->last_name ?? '' }}</td>
+                    <td>{{ $contact->email ?? '' }}</td>
+                    <td style="text-align: center;">{{ $contact->gender }}</td>
+                    <td style="text-align: center;">{{ $contact->delete_flag }}</td>
+                    <td style="text-align: center;">
+                        <!-- Mark as Deleted button -->
+                        <form action="{{ route('contacts.markDelete', $contact->contact_id) }}" method="POST"
+                            style="display:inline;">
+                            @csrf
+                            <button type="submit"><i class="fa-solid fa-trash" style="color: red;"></i></button>
+                        </form>
                     </td>
                 </tr>
             @empty
-                <tr>
-                    <td colspan="5">No contacts found.</td>
+                <tr style="text-align: center;">
+                    <td colspan="7">No contacts found.</td>
                 </tr>
             @endforelse
         </tbody>
     </table>
-</body>
-</html>
+
+    <!-- Pagination links -->
+    <div class="pagination">
+        {{ $contacts->links() }}
+    </div>
+@endsection

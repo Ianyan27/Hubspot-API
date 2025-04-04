@@ -19,5 +19,8 @@ class Contact extends Model
         'last_name',
         'email',
         'delete_flag',
+        'hubspot_lastmodified',
+        'marked_deleted',
+        'gender'
     ];
 }

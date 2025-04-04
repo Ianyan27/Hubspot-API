@@ -1,0 +1,57 @@
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+header{
+    height: clamp(50px, 10vh, 100px);
+}
+
+body{
+    background-color: #EEE2E8;
+}
+
+
+/* .container{
+    display: grid;
+    grid-template-columns: 10% 80%;
+}
+
+.sidebar{
+    padding: 20px;
+    background-color: white;
+}
+
+.content{
+    padding: 20px;
+    background-color: white;
+} */
+
+svg {
+    width: 20px;
+    height: 20px;
+}
+
+button{
+    background-color: white;
+    border: none;
+}
+
+/* Style for marked/deleted contacts */
+.marked-deleted {
+    background-color: rgba(128, 128, 128, 0.507);
+    color: black;
+}
+
+.marked-deleted button {
+    background-color: inherit;
+    color: white;
+    border: none;
+}
+
+/* Optional styling for pagination */
+.pagination {
+    margin: 20px 0;
+    text-align: center;
+}

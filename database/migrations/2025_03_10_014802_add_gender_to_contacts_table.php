@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('contacts', function (Blueprint $table) {
-            $table->boolean('marked_deleted')->default(false)->after('delete_flag');
+            $table->string('gender')->nullable()->after('email');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('contacts', function (Blueprint $table) {
-            $table->dropColumn('marked_deleted');
+            $table->dropColumn('gender');
         });
     }
 };

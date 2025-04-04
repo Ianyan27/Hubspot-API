@@ -2,18 +2,27 @@
 // Define the file name
 $filename = "contacts_sample.csv";
 
-// Define your dummy data rows
-$data = [
-    ['Contact ID', 'Email', 'First Name', 'Last Name', 'delete_flag'],
-    [1001, 'john.doe@example.com', 'John', 'Doe', 'Yes'],
-    [1002, 'jane.smith@example.com', 'Jane', 'Smith', 'No'],
-    [1003, 'bob.jones@example.com', 'Bob', 'Jones', 'Yes']
-];
+// Initialize the data array with the header row
+$data = [];
+$data[] = ['Contact ID', 'Email', 'First Name', 'Last Name', 'delete_flag', 'gender'];
+
+// Generate 50 dummy contacts
+for ($i = 1; $i <= 50; $i++) {
+    $contactId = 1000 + $i;
+    $firstName = "Jedo{$i}";
+    $lastName = "Last{$i}";
+    $email = "contact{$i}@example.com";
+    // Randomly assign 'Yes' or 'No' to delete_flag
+    $deleteFlag = (rand(0, 1) === 1) ? 'Yes' : 'No';
+    $gender = (rand(0, 1) === 1) ? 'Male' : 'Female';
+
+    $data[] = [$contactId, $email, $firstName, $lastName, $deleteFlag, $gender];
+}
 
 // Open the file for writing
 $fp = fopen($filename, 'w');
 
-// Loop through each row and write it to the CSV file
+// Write each row to the CSV file
 foreach ($data as $row) {
     fputcsv($fp, $row);
 }
